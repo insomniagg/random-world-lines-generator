@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Balanced Line Generator (GeoJSON)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+  body { margin:0; font-family: Arial, sans-serif; }
+  #map { height: 80vh; width: 100vw; }
+  .controls { padding: 8px; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); position:absolute; top:10px; left:10px; z-index:1000; border-radius:6px;}
+  #coords { padding:8px; font-size:14px; max-height: 20vh; overflow:auto; background:#f9f9f9; }
+  label { margin-right:6px; }
+  button { margin-left: 4px; }
+</style>
+</head>
+<body>
+<div class="controls">
+  <label for="numLines">Number of lines (1-50):</label>
+  <input type="number" id="numLines" min="1" max="50" value="2">
+  <button onclick="generateLines()">Generate</button>
+  <button onclick="saveRoundGeoJSON()">Save Round</button>
+</div>
+<div id="map"></div>
+<div id="coords"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([20,0],2);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap contributors'}).addTo(map);
+const layerGroup = L.layerGroup().addTo(map);
+
+const continents = {
+  'Africa': [-18.5,-35,51.5,37.5],
+  'Antarctica': [-180,-90,180,-60],
+  'Asia':[26,-11,180,81],
+  'Europe':[-31.5,34.5,60,72.5],
+  'North America':[-168,5,-52,83],
+  'Oceania':[110,-48,180,6],
+  'South America':[-82,-56,-34,13.5]
+};
+
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function chooseContinent(){ const keys = Object.keys(continents); return keys[Math.floor(Math.random()*keys.length)]; }
+function randomPointInContinent(cont){ const [minLon,minLat,maxLon,maxLat]=continents[cont]; return [rand(minLat,maxLat), rand(minLon,maxLon)]; }
+
+let currentPoints = [];
+
+function generateLines(){
+  layerGroup.clearLayers();
+  const numLines = parseInt(document.getElementById('numLines').value)||2;
+  currentPoints = [];
+  const coordsText = [];
+
+  for(let i=0;i<numLines*2;i++){
+    const cont = chooseContinent();
+    const [lat,lon] = randomPointInContinent(cont);
+    currentPoints.push({lat,lon,cont});
+    coordsText.push(`Point ${i+1}: ${cont} — Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`);
+  }
+
+  currentPoints.forEach((p,i)=>{
+    L.circleMarker([p.lat,p.lon],{radius:6}).addTo(layerGroup)
+      .bindPopup(`Point ${i+1}<br>${p.cont}<br>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`);
+  });
+
+  for(let i=0;i<numLines;i++){
+    const a=currentPoints[2*i], b=currentPoints[2*i+1];
+    L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color:'red'}).addTo(layerGroup);
+  }
+
+  map.fitBounds(currentPoints.map(p=>[p.lat,p.lon]),{padding:[40,40]});
+  document.getElementById('coords').innerHTML = "<b>Coordinates of markers:</b><br>" + coordsText.join("<br>");
+}
+
+function saveRoundGeoJSON(){
+  if(currentPoints.length === 0) return alert("No points to save!");
+
+  const features = [];
+
+  // Add point features
+  currentPoints.forEach((p,i)=>{
+    features.push({
+      type: "Feature",
+      properties: { name: `Point ${i+1}`, continent: p.cont },
+      geometry: { type: "Point", coordinates: [p.lon, p.lat] }
+    });
+  });
+
+  // Add line features
+  for(let i=0;i<Math.floor(currentPoints.length/2);i++){
+    const a=currentPoints[2*i];
+    const b=currentPoints[2*i+1];
+    features.push({
+      type:"Feature",
+      properties:{ name:`Line ${i+1}` },
+      geometry:{ type:"LineString", coordinates:[[a.lon,a.lat],[b.lon,b.lat]] }
+    });
+  }
+
+  const geojson = { type:"FeatureCollection", features };
+
+  // Create download as proper GeoJSON file
+  const blob = new Blob([JSON.stringify(geojson,null,2)], {type:"application/vnd.geo+json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "round.geojson";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Initial generation
+generateLines();
+</script>
+</body>
+</html>
