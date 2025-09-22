@@ -56,7 +56,8 @@ function generateLines(){
     const cont = chooseContinent();
     const [lat,lon] = randomPointInContinent(cont);
     currentPoints.push({lat,lon,cont});
-    coordsText.push(`Point ${i+1}: ${cont} — Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`);
+    // ✅ cleaned up version — no "Lat:" or "Lon:" labels
+    coordsText.push(`Point ${i+1}: ${cont} — ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
   }
 
   currentPoints.forEach((p,i)=>{
