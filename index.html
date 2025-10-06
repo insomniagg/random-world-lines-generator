@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Balanced Line Generator (GeoJSON)</title>
+<title>Balanced Line Generator (KML Export)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <style>
   body { margin:0; font-family: Arial, sans-serif; }
@@ -16,10 +16,10 @@
 </head>
 <body>
 <div class="controls">
-  <label for="numLines">Number of lines (1-50):</label>
+  <label for="numLines">Number of lines (1–50):</label>
   <input type="number" id="numLines" min="1" max="50" value="2">
   <button onclick="generateLines()">Generate</button>
-  <button onclick="saveRoundGeoJSON()">Save Round</button>
+  <button onclick="saveRoundKML()">Save Round (KML)</button>
 </div>
 <div id="map"></div>
 <div id="coords"></div>
@@ -27,7 +27,10 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const map = L.map('map').setView([20,0],2);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap contributors'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19, 
+  attribution:'© OpenStreetMap contributors'
+}).addTo(map);
 const layerGroup = L.layerGroup().addTo(map);
 
 const continents = {
@@ -41,8 +44,14 @@ const continents = {
 };
 
 function rand(min,max){ return Math.random()*(max-min)+min; }
-function chooseContinent(){ const keys = Object.keys(continents); return keys[Math.floor(Math.random()*keys.length)]; }
-function randomPointInContinent(cont){ const [minLon,minLat,maxLon,maxLat]=continents[cont]; return [rand(minLat,maxLat), rand(minLon,maxLon)]; }
+function chooseContinent(){ 
+  const keys = Object.keys(continents); 
+  return keys[Math.floor(Math.random()*keys.length)]; 
+}
+function randomPointInContinent(cont){ 
+  const [minLon,minLat,maxLon,maxLat]=continents[cont]; 
+  return [rand(minLat,maxLat), rand(minLon,maxLon)]; 
+}
 
 let currentPoints = [];
 
@@ -56,8 +65,7 @@ function generateLines(){
     const cont = chooseContinent();
     const [lat,lon] = randomPointInContinent(cont);
     currentPoints.push({lat,lon,cont});
-    // ✅ cleaned up version — no "Lat:" or "Lon:" labels
-    coordsText.push(`Point ${i+1}: ${cont} — ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    coordsText.push(`Point ${i+1}: ${cont} — Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`);
   }
 
   currentPoints.forEach((p,i)=>{
@@ -74,39 +82,57 @@ function generateLines(){
   document.getElementById('coords').innerHTML = "<b>Coordinates of markers:</b><br>" + coordsText.join("<br>");
 }
 
-function saveRoundGeoJSON(){
+function saveRoundKML(){
   if(currentPoints.length === 0) return alert("No points to save!");
 
-  const features = [];
+  let kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Round Lines</name>
+`;
 
-  // Add point features
-  currentPoints.forEach((p,i)=>{
-    features.push({
-      type: "Feature",
-      properties: { name: `Point ${i+1}`, continent: p.cont },
-      geometry: { type: "Point", coordinates: [p.lon, p.lat] }
-    });
+  // Add points
+  currentPoints.forEach((p, i) => {
+    kml += `
+  <Placemark>
+    <name>Point ${i + 1} (${p.cont})</name>
+    <Point>
+      <coordinates>${p.lon},${p.lat},0</coordinates>
+    </Point>
+  </Placemark>`;
   });
 
-  // Add line features
-  for(let i=0;i<Math.floor(currentPoints.length/2);i++){
-    const a=currentPoints[2*i];
-    const b=currentPoints[2*i+1];
-    features.push({
-      type:"Feature",
-      properties:{ name:`Line ${i+1}` },
-      geometry:{ type:"LineString", coordinates:[[a.lon,a.lat],[b.lon,b.lat]] }
-    });
+  // Add lines
+  for (let i = 0; i < Math.floor(currentPoints.length / 2); i++) {
+    const a = currentPoints[2 * i];
+    const b = currentPoints[2 * i + 1];
+    kml += `
+  <Placemark>
+    <name>Line ${i + 1}</name>
+    <Style>
+      <LineStyle>
+        <color>ff0000ff</color>
+        <width>2</width>
+      </LineStyle>
+    </Style>
+    <LineString>
+      <coordinates>
+        ${a.lon},${a.lat},0
+        ${b.lon},${b.lat},0
+      </coordinates>
+    </LineString>
+  </Placemark>`;
   }
 
-  const geojson = { type:"FeatureCollection", features };
+  kml += `
+</Document>
+</kml>`;
 
-  // Create download as proper GeoJSON file
-  const blob = new Blob([JSON.stringify(geojson,null,2)], {type:"application/vnd.geo+json"});
+  const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "round.geojson";
+  a.download = "round.kml";
   a.click();
   URL.revokeObjectURL(url);
 }
